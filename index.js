@@ -28,25 +28,54 @@ async function run() {
 
     const db = client.db("loan_link_db");
     const usersCollection = db.collection("users");
+    const loansCollection = db.collection("loans");
 
-    // app.post("/users", async (req, res) => {
-    //   const user = req.body;
-    //   user.role = "user";
-    //   user.createdAt = new Date();
-    //   const email = user.email;
-    //   const userExists = await usersCollection.findOne({ email });
-
-    //   if (userExists) {
-    //     return res.send({ message: "user exists" });
-    //   }
-
-    //   const result = await usersCollection.insertOne(user);
-    //   res.send(result);
-    // });
     app.post("/users", async (req, res) => {
       const user = req.body;
+      user.role = "user";
+      user.createdAt = new Date();
+      const email = user.email;
+      const userExists = await usersCollection.findOne({ email });
+
+      if (userExists) {
+        return res.send({ message: "user exists" });
+      }
+
       const result = await usersCollection.insertOne(user);
       res.send(result);
+    });
+
+    // Create a new Loan
+    app.post("/loans", async (req, res) => {
+      try {
+        const newLoanData = req.body;
+
+        // Add a server-side timestamp before insertion
+        const loanDocument = {
+          ...newLoanData,
+          date: new Date(),
+          // Ensure fields match MongoDB's structure
+          // Note: Validation logic must be implemented manually here,
+          // as the Mongoose Schema is not being used.
+        };
+
+        // 1. Get the 'loans' collection and call insertOne()
+        const result = await loansCollection.insertOne(loanDocument);
+
+        // 2. Send success response back to the client
+        res.status(201).json({
+          success: true,
+          // The result contains the insertedId
+          insertedId: result.insertedId,
+          message: "Loan record created successfully using insertOne",
+        });
+      } catch (error) {
+        console.error("Error creating loan record:", error.message);
+        res.status(400).json({
+          success: false,
+          error: error.message,
+        });
+      }
     });
 
     // Send a ping to confirm a successful connection
