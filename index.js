@@ -49,23 +49,14 @@ async function run() {
     app.post("/loans", async (req, res) => {
       try {
         const newLoanData = req.body;
-
-        // Add a server-side timestamp before insertion
         const loanDocument = {
           ...newLoanData,
           date: new Date(),
-          // Ensure fields match MongoDB's structure
-          // Note: Validation logic must be implemented manually here,
-          // as the Mongoose Schema is not being used.
         };
-
-        // 1. Get the 'loans' collection and call insertOne()
         const result = await loansCollection.insertOne(loanDocument);
 
-        // 2. Send success response back to the client
         res.status(201).json({
           success: true,
-          // The result contains the insertedId
           insertedId: result.insertedId,
           message: "Loan record created successfully using insertOne",
         });
@@ -76,6 +67,12 @@ async function run() {
           error: error.message,
         });
       }
+    });
+
+    app.get("/loans", async (req, res) => {
+      const limit = parseInt(req.query.limit) || 6;
+      const result = await loansCollection.find().limit(limit).toArray();
+      res.send(result);
     });
 
     // Send a ping to confirm a successful connection
