@@ -1,5 +1,5 @@
 const express = require("express");
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
 const cors = require("cors");
 const app = express();
@@ -29,6 +29,7 @@ async function run() {
     const db = client.db("loan_link_db");
     const usersCollection = db.collection("users");
     const loansCollection = db.collection("loans");
+    const loanApplications = db.collection("applications");
 
     app.post("/users", async (req, res) => {
       const user = req.body;
@@ -70,9 +71,65 @@ async function run() {
     });
 
     app.get("/loans", async (req, res) => {
-      const limit = parseInt(req.query.limit) || 6;
-      const result = await loansCollection.find().limit(limit).toArray();
+      const result = await loansCollection.find().toArray();
       res.send(result);
+    });
+    app.get("/loans/latest", async (req, res) => {
+      try {
+        const result = await loansCollection
+          .find()
+          .sort({ createdAt: -1 }) // newest first
+          .limit(6)
+          .toArray();
+
+        res.send(result);
+      } catch (error) {
+        console.log(error);
+        res.status(500).send({ message: "Failed to fetch latest crops" });
+      }
+    });
+
+    app.get("/loans/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await loansCollection.findOne(query);
+      res.send(result);
+    });
+
+    app.post("/loanApplications", async (req, res) => {
+      try {
+        const applicationData = req.body;
+
+        if (!applicationData.userEmail || !applicationData.loanId) {
+          return res
+            .status(400)
+            .json({ message: "Missing required fields for application." });
+        }
+
+        const existingApplication = await loanApplications.findOne({
+          userEmail: applicationData.userEmail,
+          loanId: applicationData.loanId,
+        });
+
+        if (existingApplication) {
+          return res
+            .status(409)
+            .json({ message: "You have already applied for this loan." });
+        }
+
+        // ✅ FIX: do NOT overwrite res
+        const result = await loanApplications.insertOne(applicationData);
+
+        res.status(201).json({
+          message: "Loan application successfully submitted.",
+          applicationId: result.insertedId,
+        });
+      } catch (error) {
+        console.error("Error submitting loan application:", error);
+        res.status(500).json({
+          message: "Failed to submit application.",
+        });
+      }
     });
 
     // Send a ping to confirm a successful connection
