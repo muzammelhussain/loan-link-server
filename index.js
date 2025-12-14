@@ -46,6 +46,18 @@ async function run() {
       res.send(result);
     });
 
+    app.get("/users/:email/role", async (req, res) => {
+      const email = req.params.email;
+      const query = { email };
+      const user = await usersCollection.findOne(query);
+      res.send({ role: user?.role || "user" });
+    });
+
+    app.get("/users", async (req, res) => {
+      const users = await usersCollection.find().toArray();
+      res.send(users);
+    });
+
     // Create a new Loan
     app.post("/loans", async (req, res) => {
       try {
@@ -117,7 +129,6 @@ async function run() {
             .json({ message: "You have already applied for this loan." });
         }
 
-        // ✅ FIX: do NOT overwrite res
         const result = await loanApplications.insertOne(applicationData);
 
         res.status(201).json({
@@ -130,6 +141,15 @@ async function run() {
           message: "Failed to submit application.",
         });
       }
+    });
+
+    // GET user applications
+    app.get("/loanApplications/user/:email", async (req, res) => {
+      const email = req.params.email;
+      const result = await loanApplications
+        .find({ userEmail: email })
+        .toArray();
+      res.send(result);
     });
 
     // Send a ping to confirm a successful connection
