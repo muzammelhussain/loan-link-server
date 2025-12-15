@@ -59,6 +59,8 @@ async function run() {
       res.send(users);
     });
 
+    // admin related apis
+
     // update user's role api
     app.patch("/users/role/:id", async (req, res) => {
       try {
@@ -141,6 +143,47 @@ async function run() {
       }
     });
 
+    // all loans admin api
+    app.get("/admin/loans", async (req, res) => {
+      try {
+        const loans = await loansCollection.find().toArray();
+        res.send(loans);
+      } catch (error) {
+        res.status(500).send({ message: "Failed to fetch loans" });
+      }
+    });
+
+    // toggling showonhome api
+    app.patch("/admin/loans/home/:id", async (req, res) => {
+      try {
+        const { id } = req.params;
+        const { showOnHome } = req.body;
+
+        const result = await loansCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: { showOnHome } }
+        );
+
+        res.send({ success: true, modifiedCount: result.modifiedCount });
+      } catch (error) {
+        res.status(500).send({ message: "Failed to update home visibility" });
+      }
+    });
+    // delete loan api (admin)
+    app.delete("/admin/loans/:id", async (req, res) => {
+      try {
+        const { id } = req.params;
+
+        const result = await loansCollection.deleteOne({
+          _id: new ObjectId(id),
+        });
+
+        res.send({ success: true, deletedCount: result.deletedCount });
+      } catch (error) {
+        res.status(500).send({ message: "Failed to delete loan" });
+      }
+    });
+
     // Create a new Loan
     app.post("/loans", async (req, res) => {
       try {
@@ -172,7 +215,7 @@ async function run() {
     app.get("/loans/latest", async (req, res) => {
       try {
         const result = await loansCollection
-          .find()
+          .find({ showOnHome: true })
           .sort({ createdAt: -1 }) // newest first
           .limit(6)
           .toArray();
