@@ -184,6 +184,27 @@ async function run() {
       }
     });
 
+    app.patch("/admin/loans/:id", async (req, res) => {
+      try {
+        const { id } = req.params;
+        const updatedLoan = req.body;
+
+        const result = await loansCollection.updateOne(
+          { _id: new ObjectId(id) },
+          {
+            $set: {
+              ...updatedLoan,
+              updatedAt: new Date(),
+            },
+          }
+        );
+
+        res.send({ success: true, modifiedCount: result.modifiedCount });
+      } catch (error) {
+        res.status(500).send({ message: "Failed to update loan" });
+      }
+    });
+
     // Create a new Loan
     app.post("/loans", async (req, res) => {
       try {
@@ -266,6 +287,16 @@ async function run() {
         res.status(500).json({
           message: "Failed to submit application.",
         });
+      }
+    });
+
+    app.get("/admin/loan-applications", async (req, res) => {
+      try {
+        const result = await loanApplications.find().toArray();
+
+        res.status(200).send(result);
+      } catch (error) {
+        res.status(500).send({ message: "Failed to fetch loan applications" });
       }
     });
 
