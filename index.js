@@ -33,7 +33,8 @@ async function run() {
 
     app.post("/users", async (req, res) => {
       const user = req.body;
-      user.role = "user";
+      user.role = user.role || "user";
+      user.status = "Active";
       user.createdAt = new Date();
       const email = user.email;
       const userExists = await usersCollection.findOne({ email });
@@ -56,6 +57,88 @@ async function run() {
     app.get("/users", async (req, res) => {
       const users = await usersCollection.find().toArray();
       res.send(users);
+    });
+
+    // update user's role api
+    app.patch("/users/role/:id", async (req, res) => {
+      try {
+        const { id } = req.params;
+        const { role } = req.body;
+
+        if (!role) {
+          return res.status(400).json({ message: "Role is required" });
+        }
+
+        const result = await usersCollection.updateOne(
+          { _id: new ObjectId(id) },
+          {
+            $set: {
+              role,
+              updatedAt: new Date(),
+            },
+          }
+        );
+
+        res.send({ success: true, modifiedCount: result.modifiedCount });
+      } catch (error) {
+        console.error("Update role error:", error);
+        res.status(500).json({ message: "Failed to update role" });
+      }
+    });
+
+    // suspend user api
+    app.patch("/users/suspend/:id", async (req, res) => {
+      try {
+        const { id } = req.params;
+        const { reason, feedback } = req.body;
+
+        if (!reason || !feedback) {
+          return res
+            .status(400)
+            .json({ message: "Reason and feedback are required" });
+        }
+
+        const result = await usersCollection.updateOne(
+          { _id: new ObjectId(id) },
+          {
+            $set: {
+              status: "Suspended",
+              suspendReason: reason,
+              suspendFeedback: feedback,
+              suspendedAt: new Date(),
+            },
+          }
+        );
+
+        res.send({ success: true, modifiedCount: result.modifiedCount });
+      } catch (error) {
+        console.error("Suspend user error:", error);
+        res.status(500).json({ message: "Failed to suspend user" });
+      }
+    });
+
+    app.patch("/users/activate/:id", async (req, res) => {
+      try {
+        const { id } = req.params;
+
+        const result = await usersCollection.updateOne(
+          { _id: new ObjectId(id) },
+          {
+            $set: {
+              status: "Active",
+              suspendReason: null,
+              suspendFeedback: null,
+              suspendedAt: null,
+              updatedAt: new Date(),
+            },
+          }
+        );
+
+        res.send({ success: true, modifiedCount: result.modifiedCount });
+      } catch (error) {
+        console.error("Activate user error:", error);
+        res.status(500).json({ message: "Failed to activate user" });
+      }
     });
 
     // Create a new Loan
