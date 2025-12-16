@@ -206,7 +206,7 @@ async function run() {
     });
 
     // Create a new Loan
-    app.post("/loans", async (req, res) => {
+    app.post("/manager/loans", async (req, res) => {
       try {
         const newLoanData = req.body;
         const loanDocument = {
@@ -307,6 +307,75 @@ async function run() {
         .find({ userEmail: email })
         .toArray();
       res.send(result);
+    });
+
+    // GET /manager/loan-applications/pending api
+    app.get("/manager/loan-applications/pending", async (req, res) => {
+      try {
+        const loans = await loanApplications
+          .find({ status: "Pending" })
+          .toArray();
+
+        res.send(loans);
+      } catch (error) {
+        res.status(500).send({ message: "Failed to fetch pending loans" });
+      }
+    });
+
+    // PATCH /manager/loan-applications/:id/approve
+
+    app.patch("/manager/loan-applications/:id/approve", async (req, res) => {
+      try {
+        const { id } = req.params;
+
+        const result = await loanApplications.updateOne(
+          { _id: new ObjectId(id) },
+          {
+            $set: {
+              status: "Approved",
+              approvedAt: new Date(),
+            },
+          }
+        );
+        res.send({ success: true, message: "Loan approved" });
+      } catch (error) {
+        res.status(500).send({ message: "Approval failed" });
+      }
+    });
+
+    // PATCH /manager/loan-applications/:id/reject
+    app.patch("/manager/loan-applications/:id/reject", async (req, res) => {
+      try {
+        const { id } = req.params;
+
+        const result = await loanApplications.updateOne(
+          { _id: new ObjectId(id) },
+          {
+            $set: {
+              status: "Rejected",
+              rejectedAt: new Date(),
+            },
+          }
+        );
+
+        res.send({ success: true, message: "Loan rejected" });
+      } catch (error) {
+        res.status(500).send({ message: "Rejection failed" });
+      }
+    });
+
+    // GET /manager/loan-applications/approved
+    app.get("/manager/loan-applications/approved", async (req, res) => {
+      try {
+        const loans = await loanApplications
+          .find({ status: "Approved" })
+          .toArray();
+
+        res.send(loans);
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ message: "Failed to fetch approved loans" });
+      }
     });
 
     // Send a ping to confirm a successful connection
