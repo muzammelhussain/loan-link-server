@@ -228,7 +228,15 @@ async function run() {
         });
       }
     });
-
+    // app.post("/loans", async (req, res) => {
+    //   const data = req.body;
+    //   const result = await loansCollection.insertOne(data);
+    //   res.status(201).json({
+    //     success: true,
+    //     insertedId: result.insertedId,
+    //     message: "Loan record created successfully using insertOne",
+    //   });
+    // });
     app.get("/loans", async (req, res) => {
       const result = await loansCollection.find().toArray();
       res.send(result);
@@ -253,6 +261,66 @@ async function run() {
       const query = { _id: new ObjectId(id) };
       const result = await loansCollection.findOne(query);
       res.send(result);
+    });
+
+    // GET /manager/loans
+    app.get("/manager/loans", async (req, res) => {
+      try {
+        const loans = await loansCollection.find().toArray();
+
+        res.send(loans);
+      } catch (error) {
+        res.status(500).send({ message: "Failed to fetch loans" });
+      }
+    });
+    app.get("/manager/loans/:id", async (req, res) => {
+      try {
+        const loans = await loansCollection.find().toArray();
+
+        res.send(loans);
+      } catch (error) {
+        res.status(500).send({ message: "Failed to fetch loans" });
+      }
+    });
+
+    app.patch("/manager/loans/:id", async (req, res) => {
+      try {
+        const { id } = req.params;
+        const updatedLoan = req.body;
+
+        const result = await loansCollection.updateOne(
+          { _id: new ObjectId(id) },
+          {
+            $set: {
+              ...updatedLoan,
+              updatedAt: new Date(),
+            },
+          }
+        );
+
+        res.send({ success: true, modifiedCount: result.modifiedCount });
+      } catch (error) {
+        res.status(500).send({ message: "Failed to update loan" });
+      }
+    });
+
+    // DELETE /manager/loans/:id
+    app.delete("/manager/loans/:id", async (req, res) => {
+      try {
+        const { id } = req.params;
+
+        const result = await loansCollection.deleteOne({
+          _id: new ObjectId(id),
+        });
+
+        if (result.deletedCount === 0) {
+          return res.status(404).send({ message: "Loan not found" });
+        }
+
+        res.send({ success: true });
+      } catch (error) {
+        res.status(500).send({ message: "Delete failed" });
+      }
     });
 
     app.post("/loanApplications", async (req, res) => {
