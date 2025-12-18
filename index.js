@@ -1,14 +1,42 @@
 const express = require("express");
+require("dotenv").config();
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
-
+const stripe = require("stripe")(process.env.STRIPE_SECRET);
 const cors = require("cors");
 const app = express();
-require("dotenv").config();
 const port = process.env.PORT || 3000;
+
+const admin = require("firebase-admin");
+
+const serviceAccount = require("./loan-link-firebase-adminsdk.json");
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
 
 //middleware
 app.use(express.json());
 app.use(cors());
+
+//token middleware
+
+const verifyFBToken = async (req, res, next) => {
+  const token = req.headers.authorization;
+
+  if (!token) {
+    return res.status(401).send({ message: "unauthorized access" });
+  }
+
+  try {
+    const idToken = token.split(" ")[1];
+    const decoded = await admin.auth().verifyIdToken(idToken);
+    console.log("decoded in the token", decoded);
+    req.decoded_email = decoded.email;
+    next();
+  } catch (err) {
+    return res.status(401).send({ message: "unauthorized access" });
+  }
+};
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@keramot.mqb48yw.mongodb.net/?appName=Keramot`;
 
@@ -30,6 +58,7 @@ async function run() {
     const usersCollection = db.collection("users");
     const loansCollection = db.collection("loans");
     const loanApplications = db.collection("applications");
+    const paymentCollection = db.collection("payments");
 
     app.post("/users", async (req, res) => {
       const user = req.body;
@@ -143,6 +172,84 @@ async function run() {
       }
     });
 
+    // payment related apis
+    app.post("/payment-checkout-session", async (req, res) => {
+      const paymentInfo = req.body;
+      const session = await stripe.checkout.sessions.create({
+        line_items: [
+          {
+            price_data: {
+              currency: "usd",
+              unit_amount: 1000,
+              product_data: {
+                name: `Please pay for: ${paymentInfo.loanTitle}`,
+              },
+            },
+            quantity: 1,
+          },
+        ],
+        mode: "payment",
+        metadata: {
+          loanId: paymentInfo.loanId,
+          //trackingId: paymentInfo.trackingId,
+        },
+        customer_email: paymentInfo.email,
+        success_url: `${process.env.SITE_DOMAIN}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${process.env.SITE_DOMAIN}/dashboard/payment-cancelled`,
+      });
+
+      res.send({ url: session.url });
+    });
+    app.patch("/payment-success", async (req, res) => {
+      const sessionId = req.query.session_id;
+      const session = await stripe.checkout.sessions.retrieve(sessionId);
+      //console.log(session);
+
+      const transactionId = session.payment_intent;
+      const query = { transactionId: transactionId };
+
+      const paymentExist = await paymentCollection.findOne(query);
+      console.log(paymentExist);
+      if (paymentExist) {
+        return res.send({
+          message: "already exists",
+          transactionId,
+        });
+      }
+
+      if (session.payment_status === "paid") {
+        const id = session.metadata.loanId;
+        const query = { _id: new ObjectId(id) };
+        const update = {
+          $set: {
+            applicationFeeStatus: "paid",
+            transactionId: session.payment_intent,
+          },
+        };
+        const result = await loanApplications.updateOne(query, update);
+        const payment = {
+          amount: session.amount_total / 100,
+          currency: session.currency,
+          customerEmail: session.customer_email,
+          loanId: session.metadata.loanId,
+          loanTitle: session.metadata.loanTitle,
+          transactionId: session.payment_intent,
+          paymentStatus: session.payment_status,
+          paidAt: new Date(),
+        };
+        if (session.payment_status === "paid") {
+          const resultPayment = await paymentCollection.insertOne(payment);
+          res.send({
+            success: true,
+            modifyLoans: result,
+            transactionId: session.payment_intent,
+            paymentInfo: resultPayment,
+          });
+        }
+      }
+      res.send({ success: false });
+    });
+
     // all loans admin api
     app.get("/admin/loans", async (req, res) => {
       try {
@@ -237,10 +344,29 @@ async function run() {
     //     message: "Loan record created successfully using insertOne",
     //   });
     // });
+
+    // GET /loans?page=1&limit=6
     app.get("/loans", async (req, res) => {
-      const result = await loansCollection.find().toArray();
-      res.send(result);
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 6;
+
+      const skip = (page - 1) * limit;
+
+      const total = await loansCollection.countDocuments();
+      const loans = await loansCollection
+        .find()
+        .skip(skip)
+        .limit(limit)
+        .toArray();
+
+      res.send({
+        loans,
+        total,
+        page,
+        limit,
+      });
     });
+
     app.get("/loans/latest", async (req, res) => {
       try {
         const result = await loansCollection
@@ -369,13 +495,17 @@ async function run() {
     });
 
     // GET user applications
-    app.get("/loanApplications/user/:email", async (req, res) => {
-      const email = req.params.email;
-      const result = await loanApplications
-        .find({ userEmail: email })
-        .toArray();
-      res.send(result);
-    });
+    app.get(
+      "/loanApplications/user/:email",
+
+      async (req, res) => {
+        const email = req.params.email;
+        const result = await loanApplications
+          .find({ userEmail: email })
+          .toArray();
+        res.send(result);
+      }
+    );
 
     // GET /manager/loan-applications/pending api
     app.get("/manager/loan-applications/pending", async (req, res) => {
