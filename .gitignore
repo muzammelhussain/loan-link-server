@@ -1,4 +1,4 @@
 node_modules
-env
+.env
 loan-link-firebase-adminsdk.json
 .vercel
