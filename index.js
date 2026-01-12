@@ -253,6 +253,11 @@ async function run() {
       res.send({ success: false });
     });
 
+
+
+
+
+
     // all loans admin api
     app.get("/admin/loans", async (req, res) => {
       try {
@@ -348,6 +353,53 @@ async function run() {
     //   });
     // });
 
+     app.get("/loans", async (req, res) => {
+    res.send(await loansCollection.find().toArray());
+  });
+
+app.get("/loans/page", async (req, res) => {
+  try {
+    const page = Number(req.query.page) || 1;
+    const limit = Number(req.query.limit) || 8;
+    const skip = (page - 1) * limit;
+
+    const search = req.query.search || "";
+    const category = req.query.category || "";
+
+    const query = {};
+
+    // 🔍 Search by title
+    if (search) {
+      query.title = { $regex: search, $options: "i" };
+    }
+
+    // 🏷 Category filter
+    if (category) {
+      query.category = category;
+    }
+
+    const total = await loansCollection.countDocuments(query);
+
+    const loans = await loansCollection
+      .find(query)
+      .skip(skip)
+      .limit(limit)
+      .toArray();
+
+    res.send({
+      loans,
+      total,
+      page,
+      limit,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({ message: "Failed to fetch loans" });
+  }
+});
+
+
+
     // GET /loans?page=1&limit=6
     app.get("/loans", async (req, res) => {
       const page = parseInt(req.query.page) || 1;
@@ -375,7 +427,7 @@ async function run() {
         const result = await loansCollection
           .find({ showOnHome: true })
           .sort({ createdAt: -1 }) // newest first
-          .limit(6)
+          .limit(12)
           .toArray();
 
         res.send(result);
@@ -521,6 +573,10 @@ async function run() {
       }
     });
 
+
+     app.get("/applications", async (req, res) => {
+    res.send(await loanApplications.find().toArray());
+  });
     // GET user applications
     app.get(
       "/loanApplications/user/:email",
